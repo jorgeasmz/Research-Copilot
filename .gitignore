@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+
+# Virtual Environments
+venv/
+.venv/
+.env
+
+# IDE
+.vscode/
+
+# Corpus, benchmark and model caches. Every one of them is rebuilt from its
+# source by the pipeline or the evaluation, so none belongs in the history.
+data/source/
+data/beir/
+data/papers.jsonl
+models/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.ruff_cache/
+
+# System
+.DS_Store

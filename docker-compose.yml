@@ -1,0 +1,21 @@
+services:
+  db:
+    image: pgvector/pgvector:pg17
+    container_name: copilot_db
+    environment:
+      POSTGRES_USER: copilot
+      POSTGRES_PASSWORD: copilot
+      POSTGRES_DB: copilot
+    ports:
+      # 5433 on the host: a local Postgres, if one is installed, already holds 5432.
+      - "5433:5432"
+    volumes:
+      - copilot_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U copilot -d copilot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  copilot_pgdata:

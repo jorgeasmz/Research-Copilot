@@ -1,0 +1,20 @@
+# The CPU wheels live on PyTorch's own index. This directive has to sit on its
+# own line: appended to a requirement it is silently ignored, and pip then
+# resolves torch from PyPI, pulling in several GB of CUDA libraries that a
+# CPU-only deployment never uses.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+fastapi==0.141.1
+uvicorn==0.52.4
+pydantic==2.13.5
+pydantic-settings==2.15.0
+sqlalchemy==2.0.52
+alembic==1.19.1
+psycopg[binary]==3.3.4
+pgvector==0.5.0
+sentence-transformers==6.0.0
+torch==2.13.0+cpu
+rank-bm25==0.2.2
+pylatexenc==2.11
+httpx==0.28.1
+tenacity==9.1.4
