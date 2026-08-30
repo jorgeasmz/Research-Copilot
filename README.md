@@ -1,3 +1,13 @@
+---
+title: Research Copilot
+emoji: 🔑
+colorFrom: green
+colorTo: blue
+sdk: docker
+pinned: false
+app_port: 7860
+---
+
 # Research Copilot
 
 Answers questions about the quantum cryptography literature on arXiv, citing the
@@ -172,6 +182,28 @@ uvicorn api.main:app --port 8000
 Ingestion takes roughly 50 minutes for 300 papers, most of it the three-second
 delay arXiv asks between requests. A run is resumable: papers already stored are
 skipped, and downloaded sources are cached on disk.
+
+## Deployment
+
+| Component | Host | Why |
+|---|---|---|
+| API | Hugging Face Spaces, Docker | The encoders, the reranker and the term index need more memory than a small free container has |
+| Corpus | Neon | Postgres with `pgvector`, and the corpus is 88 MB |
+| Client | Vercel | Static export of the Next.js page |
+
+The Space is given `DATABASE_URL` and `ALLOWED_ORIGINS` as secrets. It is not
+given `GOOGLE_API_KEY`: without one the service still retrieves, and generating
+an answer requires the caller to supply a key, which is what keeps a public demo
+from spending a single day's quota in an afternoon.
+
+The corpus is moved rather than rebuilt. Re-ingesting means fetching three
+hundred sources from arXiv again at the delay the API asks for, so the local
+database is dumped and restored instead.
+
+```bash
+docker compose exec -T db pg_dump -U copilot -d copilot --no-owner > corpus.sql
+psql "$NEON_URL" -f corpus.sql
+```
 
 ## Development
 
