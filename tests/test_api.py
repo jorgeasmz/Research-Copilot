@@ -51,20 +51,42 @@ def test_search_rejects_an_out_of_range_top_k(client):
     assert response.status_code == 422
 
 
-def test_answer_reports_a_missing_key_as_unavailable(client, monkeypatch):
-    """Without credentials the endpoint is unavailable, not broken."""
-    def explode():
+def test_answer_without_a_key_asks_for_one(client, monkeypatch):
+    """Retrieval is open; generating an answer needs a key the caller supplies."""
+    def explode(api_key=""):
         raise RuntimeError("GOOGLE_API_KEY is not set")
 
     monkeypatch.setattr(main.provider, "build", explode)
 
     response = client.get("/answer", params={"question": "How is the key rate computed?"})
 
-    assert response.status_code == 503
+    assert response.status_code == 401
+    assert "X-Api-Key" in response.json()["detail"]
+
+
+def test_the_caller_key_reaches_the_provider(client, monkeypatch):
+    seen = {}
+
+    def record(api_key=""):
+        seen["key"] = api_key
+        return object()
+
+    monkeypatch.setattr(main.provider, "build", record)
+    monkeypatch.setattr(main.graph, "stream", lambda s, q, p, k, c: iter([]))
+
+    with client.stream(
+        "GET",
+        "/answer",
+        params={"question": "a real question"},
+        headers={"X-Api-Key": "visitor-key"},
+    ) as response:
+        list(response.iter_lines())
+
+    assert seen["key"] == "visitor-key"
 
 
 def test_answer_streams_passages_then_tokens_then_citations(client, monkeypatch):
-    monkeypatch.setattr(main.provider, "build", lambda: object())
+    monkeypatch.setattr(main.provider, "build", lambda api_key="": object())
     monkeypatch.setattr(
         main.graph,
         "stream",
@@ -86,7 +108,7 @@ def test_answer_streams_passages_then_tokens_then_citations(client, monkeypatch)
 
 
 def test_streamed_data_is_json(client, monkeypatch):
-    monkeypatch.setattr(main.provider, "build", lambda: object())
+    monkeypatch.setattr(main.provider, "build", lambda api_key="": object())
     monkeypatch.setattr(
         main.graph, "stream", lambda s, q, p, k, c: iter([{"event": "token", "data": "a token"}])
     )
@@ -102,3 +124,28 @@ def test_health_reports_the_cache(client):
 
     assert body["cache"]["entries"] == 0
     assert body["cache"]["hit_rate"] == 0.0
+
+
+def test_the_client_origin_is_allowed(client):
+    """The browser drops the request without these headers."""
+    response = client.options(
+        "/search",
+        headers={
+            "Origin": "http://localhost:3000",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "X-Api-Key",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:3000"
+    assert "x-api-key" in response.headers["access-control-allow-headers"].lower()
+
+
+def test_an_unlisted_origin_is_not_allowed(client):
+    response = client.options(
+        "/search",
+        headers={"Origin": "https://elsewhere.example", "Access-Control-Request-Method": "POST"},
+    )
+
+    assert "access-control-allow-origin" not in response.headers
