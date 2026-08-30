@@ -68,7 +68,7 @@ def test_answer_streams_passages_then_tokens_then_citations(client, monkeypatch)
     monkeypatch.setattr(
         main.graph,
         "stream",
-        lambda s, q, p, k: iter(
+        lambda s, q, p, k, c: iter(
             [
                 {"event": "passages", "data": [{"number": 1}]},
                 {"event": "token", "data": "text"},
@@ -88,10 +88,17 @@ def test_answer_streams_passages_then_tokens_then_citations(client, monkeypatch)
 def test_streamed_data_is_json(client, monkeypatch):
     monkeypatch.setattr(main.provider, "build", lambda: object())
     monkeypatch.setattr(
-        main.graph, "stream", lambda s, q, p, k: iter([{"event": "token", "data": "a token"}])
+        main.graph, "stream", lambda s, q, p, k, c: iter([{"event": "token", "data": "a token"}])
     )
 
     with client.stream("GET", "/answer", params={"question": "a real question"}) as response:
         payload = [line for line in response.iter_lines() if line.startswith("data:")][0]
 
     assert json.loads(payload.removeprefix("data:").strip()) == "a token"
+
+
+def test_health_reports_the_cache(client):
+    body = client.get("/").json()
+
+    assert body["cache"]["entries"] == 0
+    assert body["cache"]["hit_rate"] == 0.0
