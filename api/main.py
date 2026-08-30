@@ -1,11 +1,13 @@
 import asyncio
 import json
 import logging
+import os
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, Header, HTTPException, Query, Request
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sse_starlette.sse import EventSourceResponse
 
@@ -16,6 +18,8 @@ from generation.cache import SemanticCache
 from retrieval import hybrid, sparse
 
 logger = logging.getLogger(__name__)
+
+DEFAULT_ORIGINS = "http://localhost:3000"
 
 
 def get_session():
@@ -61,6 +65,16 @@ app = FastAPI(
 app.state.ready = False
 app.state.cache = SemanticCache()
 
+# The client is served from another origin, so the browser will not send a
+# request without these. Origins are listed rather than wildcarded because the
+# answer endpoint reads a header carrying the caller's key.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[o for o in os.getenv("ALLOWED_ORIGINS", DEFAULT_ORIGINS).split(",") if o],
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "X-Api-Key"],
+)
+
 
 @app.get("/")
 def health(request: Request) -> dict:
@@ -98,16 +112,29 @@ async def answer(
     session: Session,
     question: Annotated[str, Query(min_length=3)],
     top_k: Annotated[int, Query(ge=1, le=20)] = 5,
+    x_api_key: Annotated[str | None, Header()] = None,
 ) -> EventSourceResponse:
     """
     Streams the passages, then the answer, then the citations it resolved.
+
+    The key comes from the caller when one is supplied, since the public demo
+    leaves retrieval open and asks a visitor for their own. It is passed to the
+    provider and nowhere else.
 
     Retrieval and generation are synchronous and CPU bound, so the generator runs
     in a worker thread and its events are handed to the event loop one at a time.
     """
     try:
-        backend = provider.build()
-    except (RuntimeError, ValueError) as error:
+        backend = provider.build(api_key=x_api_key or "")
+    except RuntimeError:
+        raise HTTPException(
+            status_code=401,
+            detail=(
+                "No API key. Send one in the X-Api-Key header, or configure "
+                "GOOGLE_API_KEY on the server. Retrieval at /search needs neither."
+            ),
+        ) from None
+    except ValueError as error:
         raise HTTPException(status_code=503, detail=str(error)) from None
 
     async def events() -> AsyncIterator[dict]:

@@ -127,7 +127,14 @@ class GeminiProvider:
         return self._over_chain(lambda name: self._complete_once(name, prompt))
 
 
-def build(name: str = config.PROVIDER) -> Provider:
+def build(name: str = config.PROVIDER, api_key: str = "") -> Provider:
+    """
+    Returns a provider, using the caller's key when one is given.
+
+    The public demo leaves retrieval open and asks a visitor for their own key
+    to generate an answer, so the key arrives per request rather than from the
+    environment. It is never logged and never stored.
+    """
     if name == "gemini":
-        return GeminiProvider()
+        return GeminiProvider(api_key=api_key)
     raise ValueError(f"unknown provider: {name}")

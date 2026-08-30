@@ -132,6 +132,29 @@ paraphrase at 0.733. The reasoning is in [EVALUATION.md](EVALUATION.md).
 The passages arrive before the first token, so a reader can see what the answer
 is being drawn from while it is still being written.
 
+Generating an answer needs a key, which the caller sends in `X-Api-Key`. The
+free tier allows twenty requests per model per day, so a demo answering with the
+host's key would be spent by early afternoon; retrieval stays open because it
+reaches no model at all. A key configured on the server is used when the header
+is absent, which is the convenient arrangement for local work.
+
+## Client
+
+A Next.js page over the same two endpoints. Citations in the answer are controls
+that reveal the passage they name, and a citation the service could not resolve
+is marked rather than rendered, since a number pointing at nothing is what a
+reader most needs to see.
+
+```bash
+cd web
+npm install
+NEXT_PUBLIC_API_URL=http://localhost:8000 npm run dev
+```
+
+The visitor's key is held in browser storage and sent only with their own
+requests. It is read through `useSyncExternalStore` so the prerendered markup and
+the first client render agree on an empty value.
+
 ## Running it
 
 ```bash
@@ -199,6 +222,10 @@ Research-Copilot/
 │   └── generation.py     # Citations, abstention and latency
 ├── db/                   # SQLAlchemy models and session
 ├── alembic/              # Migrations
+├── web/
+│   ├── app/page.tsx      # Question, answer and passage panel
+│   ├── components/       # Answer rendering and passage cards
+│   └── lib/api.ts        # Search and the event stream reader
 ├── data/questions.json   # Question set for the ingested corpus
 ├── data/unanswerable.json # Questions the corpus cannot answer
 ├── EVALUATION.md         # Every measured figure and how it was obtained
