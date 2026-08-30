@@ -12,6 +12,7 @@ from sse_starlette.sse import EventSourceResponse
 from api.schemas import Passage, SearchRequest, SearchResponse
 from db.session import SessionLocal
 from generation import graph, provider
+from generation.cache import SemanticCache
 from retrieval import hybrid, sparse
 
 logger = logging.getLogger(__name__)
@@ -38,9 +39,11 @@ async def lifespan(app: FastAPI):
         with SessionLocal() as session:
             session.execute(text("select 1"))
             sparse.get_index(session)
+        app.state.cache = SemanticCache()
         app.state.ready = True
     except Exception:
         logger.exception("startup failed")
+        app.state.cache = SemanticCache()
         app.state.ready = False
 
     yield
@@ -56,11 +59,17 @@ app = FastAPI(
     lifespan=lifespan,
 )
 app.state.ready = False
+app.state.cache = SemanticCache()
 
 
 @app.get("/")
 def health(request: Request) -> dict:
-    return {"status": "ok", "ready": request.app.state.ready}
+    cache = request.app.state.cache
+    return {
+        "status": "ok",
+        "ready": request.app.state.ready,
+        "cache": {"entries": len(cache.entries), "hit_rate": round(cache.hit_rate, 3)},
+    }
 
 
 @app.post("/search", response_model=SearchResponse)
@@ -102,7 +111,7 @@ async def answer(
         raise HTTPException(status_code=503, detail=str(error)) from None
 
     async def events() -> AsyncIterator[dict]:
-        iterator = graph.stream(session, question, backend, top_k)
+        iterator = graph.stream(session, question, backend, top_k, request.app.state.cache)
         loop = asyncio.get_running_loop()
 
         while True:
