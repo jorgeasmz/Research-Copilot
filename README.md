@@ -117,6 +117,11 @@ The provider holds a chain of models. A 429 means that model's daily quota is
 spent, which no amount of waiting fixes, so the next model is tried immediately;
 a 503 means it is briefly busy, which waiting does fix.
 
+Repeated questions are answered from a cache keyed on embedding similarity. It
+is set to a high threshold because the measurement shows the classes overlap:
+within one field a pair asking different things scored 0.823 against a genuine
+paraphrase at 0.733. The reasoning is in [EVALUATION.md](EVALUATION.md).
+
 ## Endpoints
 
 | Endpoint | Purpose |
@@ -150,7 +155,7 @@ skipped, and downloaded sources are cached on disk.
 ```bash
 pip install -r requirements-dev.txt
 
-pytest              # 62 tests
+pytest              # 73 tests
 ruff check .
 ```
 
@@ -181,6 +186,7 @@ Research-Copilot/
 │   ├── provider.py       # Provider interface and the Gemini backend
 │   ├── prompt.py         # Numbered passages and the citation rules
 │   ├── citations.py      # Resolving citations back to paragraphs
+│   ├── cache.py          # Semantic cache over the daily request quota
 │   └── graph.py          # Routing, retrieval and synthesis
 ├── api/
 │   ├── main.py           # Search and the streaming answer endpoint

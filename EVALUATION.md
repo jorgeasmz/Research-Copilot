@@ -123,6 +123,36 @@ because a daily quota does not clear within a retry window. That is what makes
 the evaluation runnable at all, and it is measured: this run logged the primary
 model exhausting its quota and the second answering.
 
+## The semantic cache
+
+A hit does not save a millisecond, it saves one of the twenty daily requests.
+Matching is by embedding similarity, and the measurement says that separates the
+two classes poorly within one field.
+
+| Pairs | Similarity |
+|---|---|
+| The 171 pairs of the question set | 0.496 to 0.723 |
+| Five paraphrases of set questions | 0.766 to 0.974 |
+| An adjacent pair asking different things | **0.823** |
+| One of those paraphrases | **0.733** |
+
+The last two rows are the finding. A pair asking how key rates are computed for
+two different protocol families scores 0.823, above a genuine paraphrase at
+0.733. Questions in one field share vocabulary, and the embedding is dominated by
+what a question is about rather than by what it asks, so the classes overlap and
+no threshold separates them.
+
+The two errors are not equal. A miss spends a request; a false hit answers a
+different question, and attaches to it the passages retrieved for the question
+actually asked. The threshold is therefore 0.90, above both measured populations,
+which admits close rewordings and rejects paraphrases that change the vocabulary.
+That is closer to an exact-match cache that tolerates rewording than to a
+semantic one, and calling it otherwise would overstate what it does.
+
+Calibrating against negatives drawn from unrelated fields, which is the
+convenient thing to measure, puts the threshold near 0.70 and admits the 0.823
+pair.
+
 ## Reproducing
 
 ```bash
