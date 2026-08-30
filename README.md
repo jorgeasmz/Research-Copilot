@@ -1,12 +1,19 @@
 # Research Copilot
 
-Retrieval over arXiv `quant-ph`, built so an answer can point at the paragraph it
-came from. This repository covers the corpus and the retrieval stack; the
-synthesis layer is not in it yet.
+Retrieval over the quantum cryptography literature on arXiv, built so an answer
+can point at the paragraph it came from. This repository covers the corpus and
+the retrieval stack; the synthesis layer is not in it yet.
 
 ![CI](https://github.com/jorgeasmz/Research-Copilot/actions/workflows/ci.yml/badge.svg)
 
 ## Corpus
+
+The corpus is scoped to quantum key distribution and quantum cryptography rather
+than to `quant-ph` as a whole. Retrieval across 185,000 papers on unrelated
+subjects mostly measures topic separation, since almost any method tells an
+optics paper from an error-correction one. Within one field that signal is gone
+and what remains measured is passage selection, which is the operation the
+system exists to perform.
 
 Papers are read from the arXiv Atom API and ingested from their LaTeX source
 rather than from the rendered PDF. A two-column preprint loses in layout exactly
@@ -17,15 +24,15 @@ source recovers the real hierarchy.
 
 | | |
 |---|---:|
-| Papers ingested | 249 |
-| Chunks | 19,560 |
-| Chunks per paper | 78.6 |
-| Mean chunk length | 522 characters |
-| Distinct sections | 2,875 |
+| Papers ingested | 240 |
+| Chunks | 18,969 |
+| Chunks per paper | 79.0 |
+| Mean chunk length | 530 characters |
+| Distinct sections | 2,952 |
 
-Of 300 papers attempted, 51 were dropped: 41 whose source the LaTeX renderer
-could not process, the rest without retrievable source. That is 17% of the
-category, and it is a property of the source rather than of the pipeline.
+Of 300 papers attempted, 60 were dropped: 47 whose source the LaTeX renderer
+could not process, the rest without retrievable source. That is 20% of the
+query, and it is a property of the source rather than of the pipeline.
 
 ## Provenance
 
@@ -83,41 +90,41 @@ correct rather than merely self-consistent.
 
 ### The ingested corpus
 
-Sixteen hand-written questions, eleven of them anchored to the passage the
+Nineteen hand-written questions, fourteen of them anchored to the passage the
 question was written from. A result is judged twice: whether the answering paper
-appears, and whether that passage does.
+appears in the top five, and whether that passage does.
 
 | Retriever | Paper found | Passage found | MRR | Latency ms |
 |---|---:|---:|---:|---:|
-| `bm25` | 1.00 | 0.82 | 0.877 | 118 |
-| `dense` | 1.00 | 0.73 | **0.969** | **53** |
-| `hybrid` | 1.00 | 0.82 | **1.000** | 147 |
-| `hybrid+rerank` | 1.00 | **0.91** | **1.000** | 1788 |
+| `bm25` | 0.84 | 0.43 | 0.680 | 101 |
+| `dense` | 0.68 | 0.57 | 0.473 | **25** |
+| `hybrid` | 0.79 | 0.43 | 0.646 | 135 |
+| `hybrid+rerank` | **0.89** | **0.71** | **0.683** | 1530 |
 
-Every retriever finds the answering paper for every question, so the set does not
-discriminate at paper level and only the passage column carries information.
+Passage selection is the hard part. Every retriever places the answering paper
+in the top five most of the time, and the same rankings put the specific
+paragraph there between 43% and 71% of the time.
 
-### The reranker is not enabled by default
+### The reranker earns its latency here and not on the benchmark
 
-The two evaluations disagree about it, and neither supports switching it on.
+The two evaluations disagree, and the disagreement is informative.
 
 On 300 judged SciFact queries the cross-encoder lowers nDCG@10 from 0.709 to
-0.703 and MRR from 0.675 to 0.667, gaining 0.008 of recall. Reducing the depth
-from 25 to 10 does not recover the loss: nDCG falls further, to 0.699. The model
-is trained on web passages and the benchmark is scientific claim verification.
+0.703 and MRR from 0.675 to 0.667. Reducing the depth from 25 to 10 does not
+recover the loss; nDCG falls further, to 0.699. SciFact is claim verification
+against abstracts, and the model was trained on web passages.
 
-On the corpus questions it moves passage hits from 9 of 11 to 10 of 11. That is
-one question, which is not a basis for a decision.
+On the corpus the service actually serves, the same model raises passage
+selection from 0.43 to 0.71, which is four of the fourteen anchored questions,
+and paper recall from 0.79 to 0.89. Retrieval inside a single field cannot lean
+on topic separation, and that is the regime where reading query and passage
+together pays.
 
-The latency settles it. Reranking 25 candidates takes 2.5 s per query on four
-CPU cores. Measured directly over five queries, the median is 3.2 s for
-`ms-marco-MiniLM-L-6-v2` and 19.1 s for the larger `bge-reranker-base`, so a
-stronger cross-encoder is further outside any serving budget rather than closer
-to one.
-
-`hybrid` is what the service uses. The reranking stage stays in the code behind a
-flag, since the finding is a property of this corpus, this hardware and these
-two models rather than of reranking in general.
+It is enabled by default on that basis, with the caveat that fourteen anchored
+questions is a small sample and that the benchmark result points the other way.
+The cost is 1.5 s per query. A larger cross-encoder is not an option: measured
+over five queries, `bge-reranker-base` takes 19.1 s against 3.2 s for
+`ms-marco-MiniLM-L-6-v2` at the same depth.
 
 Reproduce with:
 
@@ -146,7 +153,7 @@ skipped, and downloaded sources are cached on disk.
 ```bash
 pip install -r requirements-dev.txt
 
-pytest              # 26 tests
+pytest              # 32 tests
 ruff check .
 ```
 
