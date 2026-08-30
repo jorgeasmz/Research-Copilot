@@ -1,8 +1,9 @@
 # Research Copilot
 
-Retrieval over the quantum cryptography literature on arXiv, built so an answer
-can point at the paragraph it came from. This repository covers the corpus and
-the retrieval stack; the synthesis layer is not in it yet.
+Answers questions about the quantum cryptography literature on arXiv, citing the
+paragraph each claim came from. Over 25 questions, 6 of them on subjects the
+corpus does not contain, it produced no fabricated citation and declined every
+question it could not support.
 
 ![CI](https://github.com/jorgeasmz/Research-Copilot/actions/workflows/ci.yml/badge.svg)
 
@@ -71,67 +72,60 @@ that would move into the database first.
 
 ## Evaluation
 
-### BEIR SciFact
+Retrieval is measured against BEIR SciFact, whose relevance judgements make the
+figures comparable to published ones, and against a hand-written question set on
+the corpus itself. Generation is measured on whether its citations resolve and
+whether it declines when the corpus cannot answer.
 
-The judgements in a public benchmark are what make the figures comparable. The
-dataset stands in for the corpus; the fusion and reranking code is the code the
-service runs.
+| | |
+|---|---:|
+| nDCG@10 on SciFact, `hybrid` | 0.709 |
+| Passage found on the corpus, `hybrid+rerank` | 0.71 |
+| Fabricated citations over 25 questions | 0 |
+| Declined on 6 uncovered questions | 6/6 |
+| Retrieval p50 | 1.6 s |
+| Complete answer p50 | 9.2 s |
 
-| Retriever | nDCG@10 | Recall@10 | MRR@10 | Rerank ms |
-|---|---:|---:|---:|---:|
-| `bm25` | 0.652 | 0.776 | 0.618 | 0 |
-| `dense` | **0.713** | 0.836 | **0.682** | 0 |
-| `hybrid` | 0.709 | 0.838 | 0.675 | 0 |
-| `hybrid+rerank` | 0.703 | **0.846** | 0.667 | 2482 |
+The numbers, how they were obtained and what they cost are in
+[EVALUATION.md](EVALUATION.md).
 
-BM25 at 0.652 and `bge-small-en-v1.5` at 0.713 sit where the published SciFact
-figures for those methods sit, which is the check that the implementation is
-correct rather than merely self-consistent.
+## Answering
 
-### The ingested corpus
-
-Nineteen hand-written questions, fourteen of them anchored to the passage the
-question was written from. A result is judged twice: whether the answering paper
-appears in the top five, and whether that passage does.
-
-| Retriever | Paper found | Passage found | MRR | Latency ms |
-|---|---:|---:|---:|---:|
-| `bm25` | 0.84 | 0.43 | 0.680 | 101 |
-| `dense` | 0.68 | 0.57 | 0.473 | **25** |
-| `hybrid` | 0.79 | 0.43 | 0.646 | 135 |
-| `hybrid+rerank` | **0.89** | **0.71** | **0.683** | 1530 |
-
-Passage selection is the hard part. Every retriever places the answering paper
-in the top five most of the time, and the same rankings put the specific
-paragraph there between 43% and 71% of the time.
-
-### The reranker earns its latency here and not on the benchmark
-
-The two evaluations disagree, and the disagreement is informative.
-
-On 300 judged SciFact queries the cross-encoder lowers nDCG@10 from 0.709 to
-0.703 and MRR from 0.675 to 0.667. Reducing the depth from 25 to 10 does not
-recover the loss; nDCG falls further, to 0.699. SciFact is claim verification
-against abstracts, and the model was trained on web passages.
-
-On the corpus the service actually serves, the same model raises passage
-selection from 0.43 to 0.71, which is four of the fourteen anchored questions,
-and paper recall from 0.79 to 0.89. Retrieval inside a single field cannot lean
-on topic separation, and that is the regime where reading query and passage
-together pays.
-
-It is enabled by default on that basis, with the caveat that fourteen anchored
-questions is a small sample and that the benchmark result points the other way.
-The cost is 1.5 s per query. A larger cross-encoder is not an option: measured
-over five queries, `bge-reranker-base` takes 19.1 s against 3.2 s for
-`ms-marco-MiniLM-L-6-v2` at the same depth.
-
-Reproduce with:
-
-```bash
-python -m evaluation.benchmark      # BEIR SciFact
-python -m evaluation.corpus         # the hand-written question set
+```mermaid
+flowchart LR
+    Q["Question"] --> R{"Comparative?"}
+    R -->|no| S["Retrieve once"]
+    R -->|yes| M["Retrieve per side"]
+    S --> C["Numbered passages"]
+    M --> C
+    C --> G["Generate with citations"]
+    G --> V["Resolve each citation"]
 ```
+
+A comparison is not one retrieval. Asking how two protocols differ and
+retrieving once returns passages about whichever side dominates the query, so
+the graph fans out and retrieves for each before answering. Routing is a regular
+expression rather than a model call, since the free tier meters requests and one
+spent classifying is one not spent answering.
+
+Every claim must carry a bracketed number naming the passage it came from, and
+every number is resolved back to a paper, a section and a paragraph after the
+answer is written. A number outside what was retrieved is reported as a
+fabrication rather than rendered as a citation.
+
+The provider holds a chain of models. A 429 means that model's daily quota is
+spent, which no amount of waiting fixes, so the next model is tried immediately;
+a 503 means it is briefly busy, which waiting does fix.
+
+## Endpoints
+
+| Endpoint | Purpose |
+|---|---|
+| `POST /search` | Retrieval only. Reaches no model and consumes no quota |
+| `GET /answer` | Server-sent events: passages, then the answer, then its citations |
+
+The passages arrive before the first token, so a reader can see what the answer
+is being drawn from while it is still being written.
 
 ## Running it
 
@@ -142,6 +136,9 @@ pip install -r requirements.txt
 
 alembic upgrade head
 python -m ingest.pipeline --limit 300
+
+echo 'GOOGLE_API_KEY=your-key' > .env    # only needed to answer, not to retrieve
+uvicorn api.main:app --port 8000
 ```
 
 Ingestion takes roughly 50 minutes for 300 papers, most of it the three-second
@@ -153,7 +150,7 @@ skipped, and downloaded sources are cached on disk.
 ```bash
 pip install -r requirements-dev.txt
 
-pytest              # 32 tests
+pytest              # 62 tests
 ruff check .
 ```
 
@@ -179,14 +176,26 @@ Research-Copilot/
 │   ├── sparse.py         # BM25 over the stored chunks
 │   ├── rerank.py         # Cross-encoder rescoring
 │   └── hybrid.py         # Rank fusion and the search entry point
+├── generation/
+│   ├── config.py         # Model, fallback chain and context size
+│   ├── provider.py       # Provider interface and the Gemini backend
+│   ├── prompt.py         # Numbered passages and the citation rules
+│   ├── citations.py      # Resolving citations back to paragraphs
+│   └── graph.py          # Routing, retrieval and synthesis
+├── api/
+│   ├── main.py           # Search and the streaming answer endpoint
+│   └── schemas.py        # Request and response models
 ├── evaluation/
 │   ├── beir.py           # Benchmark loading
 │   ├── metrics.py        # nDCG, recall and reciprocal rank
 │   ├── benchmark.py      # Public benchmark run
-│   └── corpus.py         # Hand-written question set
+│   ├── corpus.py         # Hand-written question set
+│   └── generation.py     # Citations, abstention and latency
 ├── db/                   # SQLAlchemy models and session
 ├── alembic/              # Migrations
 ├── data/questions.json   # Question set for the ingested corpus
+├── data/unanswerable.json # Questions the corpus cannot answer
+├── EVALUATION.md         # Every measured figure and how it was obtained
 ├── tests/                # pytest suite, offline
 └── docker-compose.yml    # Postgres with pgvector
 ```
