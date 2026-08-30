@@ -68,7 +68,7 @@ def ingest_paper(session, paper: Paper, latex: str) -> int:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--limit", type=int, default=config.CORPUS_SIZE)
-    parser.add_argument("--category", default=config.CATEGORY)
+    parser.add_argument("--query", default=config.SEARCH_QUERY)
     args = parser.parse_args()
 
     started = time.perf_counter()
@@ -81,7 +81,7 @@ def main() -> None:
         logger.info("%d papers already ingested", len(seen))
 
         stored = skipped = 0
-        for paper in search(args.category, args.limit, client):
+        for paper in search(args.query, args.limit, client):
             if paper.arxiv_id in seen:
                 continue
 

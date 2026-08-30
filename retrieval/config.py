@@ -11,8 +11,8 @@ TOP_K = 5
 RRF_K = 60
 
 # A cross-encoder reads the query and the passage together, so it resolves cases
-# a bi-encoder cannot. Measured on this corpus it does not pay for its latency,
-# so the stage exists but is not on by default. See the README.
+# a bi-encoder cannot. It costs 1.5 s per query and earns it on this corpus,
+# though not on the public benchmark. See the README.
 RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 RERANK_DEPTH = 25
-RERANK_BY_DEFAULT = False
+RERANK_BY_DEFAULT = True

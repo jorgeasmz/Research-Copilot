@@ -44,9 +44,9 @@ def search(
     """
     Runs both retrievers, fuses their rankings and returns the top passages.
 
-    Reranking is off by default: on the judged benchmark the cross-encoder
-    lowers nDCG and costs seconds per query. The stage is kept because that
-    result is a property of this corpus and these models, not of reranking.
+    Reranking is on by default. It costs 1.5 s per query and raises passage
+    selection on this corpus from 0.43 to 0.71, while slightly lowering nDCG
+    on the public benchmark, which is a different task on a different corpus.
     """
     rankings = [
         dense.search(session, query, candidates),

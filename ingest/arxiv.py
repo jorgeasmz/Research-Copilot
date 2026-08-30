@@ -53,9 +53,9 @@ def parse_entry(entry) -> Paper:
     )
 
 
-def search(category: str, limit: int, client: httpx.Client | None = None) -> Iterator[Paper]:
+def search(query: str, limit: int, client: httpx.Client | None = None) -> Iterator[Paper]:
     """
-    Yields the most recently submitted papers in a category, newest first.
+    Yields the most recently submitted papers matching a query, newest first.
 
     The API caps a response at a few hundred entries, so results are paged and
     the delay between pages is the one arXiv asks for.
@@ -67,16 +67,16 @@ def search(category: str, limit: int, client: httpx.Client | None = None) -> Ite
     try:
         yielded = 0
         while yielded < limit:
-            query = urllib.parse.urlencode(
+            encoded = urllib.parse.urlencode(
                 {
-                    "search_query": f"cat:{category}",
+                    "search_query": query,
                     "sortBy": "submittedDate",
                     "sortOrder": "descending",
                     "start": yielded,
                     "max_results": min(config.API_PAGE_SIZE, limit - yielded),
                 }
             )
-            response = client.get(f"{config.API_URL}?{query}")
+            response = client.get(f"{config.API_URL}?{encoded}")
             response.raise_for_status()
             entries = ElementTree.fromstring(response.content).findall("atom:entry", NAMESPACES)
 

@@ -5,7 +5,15 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 
-CATEGORY = "quant-ph"
+# The corpus is scoped to quantum cryptography rather than to quant-ph as a
+# whole: a retriever answering across 185,000 unrelated papers measures topic
+# separation, while one answering within a field measures passage selection.
+SEARCH_QUERY = (
+    "cat:quant-ph AND ("
+    'abs:"quantum key distribution" OR abs:"quantum cryptography" OR '
+    'abs:"BB84" OR abs:"decoy state"'
+    ")"
+)
 CORPUS_SIZE = 300
 
 # arXiv asks for one request every three seconds and a descriptive user agent.
