@@ -15,6 +15,7 @@ from typing import TypedDict
 from langgraph.graph import END, START, StateGraph
 
 from generation import config, prompt
+from generation.cache import SemanticCache
 from generation.citations import Checked, check
 from generation.provider import Provider
 from retrieval import hybrid
@@ -87,13 +88,32 @@ def gather(session, question: str, top_k: int = 5) -> State:
     return build_graph(session, top_k).invoke({"question": question})
 
 
-def answer(session, question: str, provider: Provider, top_k: int = 5) -> tuple[Checked, State]:
+def answer(
+    session,
+    question: str,
+    provider: Provider,
+    top_k: int = 5,
+    cache: SemanticCache | None = None,
+) -> tuple[Checked, State]:
     state = gather(session, question, top_k)
+
+    cached = cache.lookup(question) if cache else None
+    if cached is not None:
+        return check(cached, state["passages"]), state
+
     text = provider.complete(prompt.build(question, state["passages"]))
+    if cache:
+        cache.store(question, text)
     return check(text, state["passages"]), state
 
 
-def stream(session, question: str, provider: Provider, top_k: int = 5) -> Iterator[dict]:
+def stream(
+    session,
+    question: str,
+    provider: Provider,
+    top_k: int = 5,
+    cache: SemanticCache | None = None,
+) -> Iterator[dict]:
     """
     Yields the retrieved passages first, then the answer as it is produced.
 
@@ -117,12 +137,22 @@ def stream(session, question: str, provider: Provider, top_k: int = 5) -> Iterat
         ],
     }
 
-    collected = []
-    for fragment in provider.stream(prompt.build(question, passages)):
-        collected.append(fragment)
-        yield {"event": "token", "data": fragment}
+    cached = cache.lookup(question) if cache else None
+    if cached is not None:
+        # Replayed in one piece: the answer is already written, and pretending
+        # otherwise would report a latency the request did not pay.
+        yield {"event": "token", "data": cached}
+        text = cached
+    else:
+        collected = []
+        for fragment in provider.stream(prompt.build(question, passages)):
+            collected.append(fragment)
+            yield {"event": "token", "data": fragment}
+        text = "".join(collected)
+        if cache:
+            cache.store(question, text)
 
-    checked = check("".join(collected), passages)
+    checked = check(text, passages)
     yield {
         "event": "citations",
         "data": {
@@ -130,5 +160,6 @@ def stream(session, question: str, provider: Provider, top_k: int = 5) -> Iterat
             "invalid": checked.invalid,
             "grounded": checked.grounded,
             "refused": checked.refused,
+            "cached": cached is not None,
         },
     }

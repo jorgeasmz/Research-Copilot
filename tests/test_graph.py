@@ -176,3 +176,37 @@ def test_an_exhausted_quota_is_not_waited_out():
     assert _switchable(Boom(429)) is True
     assert _retryable(Boom(429)) is False
     assert _retryable(Boom(503)) is True
+
+
+def test_a_cached_question_reaches_no_provider(retrieval, monkeypatch):
+    """A hit is not a saved millisecond, it is a request the daily quota keeps."""
+    from generation.cache import SemanticCache
+
+    monkeypatch.setattr(
+        "generation.cache.encode_query", lambda q: __import__("numpy").array([1.0, 0.0])
+    )
+    cache = SemanticCache()
+    provider = FakeProvider("A claim [1].")
+
+    graph.answer(None, "How is the key rate computed?", provider, cache=cache)
+    graph.answer(None, "How is the key rate computed?", provider, cache=cache)
+
+    assert len(provider.prompts) == 1
+    assert cache.hits == 1
+
+
+def test_the_stream_reports_whether_the_answer_came_from_cache(retrieval, monkeypatch):
+    from generation.cache import SemanticCache
+
+    monkeypatch.setattr(
+        "generation.cache.encode_query", lambda q: __import__("numpy").array([1.0, 0.0])
+    )
+    cache = SemanticCache()
+    provider = FakeProvider("A claim [1].")
+    question = "How is the key rate computed?"
+
+    list(graph.stream(None, question, provider, cache=cache))
+    events = list(graph.stream(None, question, provider, cache=cache))
+
+    assert events[-1]["data"]["cached"] is True
+    assert len(provider.prompts) == 1
