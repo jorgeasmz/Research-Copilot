@@ -149,3 +149,8 @@ def test_an_unlisted_origin_is_not_allowed(client):
     )
 
     assert "access-control-allow-origin" not in response.headers
+
+
+def test_health_answers_the_platform_probe(client):
+    """Render probes with HEAD, which a GET-only route rejects with 405."""
+    assert client.head("/").status_code == 200

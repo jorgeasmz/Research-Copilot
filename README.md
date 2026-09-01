@@ -87,10 +87,10 @@ whether it declines when the corpus cannot answer.
 |---|---:|
 | nDCG@10 on SciFact, `hybrid` | 0.698 |
 | Passage found on the corpus, `hybrid+rerank` | 0.71 |
-| Resident under sustained load | 257 MB |
+| Peak during a request | 341 MB |
 | Fabricated citations over 25 questions | 0 |
 | Declined on 6 uncovered questions | 6/6 |
-| Retrieval p50, with reranking | 3.8 s |
+| Retrieval p50, with reranking | 2.0 s |
 | Complete answer p50 | 9.2 s |
 
 The numbers, how they were obtained and what they cost are in
@@ -199,14 +199,14 @@ rather than a bigger machine.
 | Encoders as ONNX graphs | 457 MB | 2.3 s |
 | Encoders quantised to int8 | 275 MB | **1.6 s** |
 | Sustained load, ONNX arena on | 1,264 MB | — |
-| **Sustained load, arena off** | **257 MB** | — |
+| **Sustained load, arena off, 4 pairs per pass** | **255 MB** | — |
 
-The last two rows are the ones that matter. A figure taken from a freshly
-started process is not a budget: ONNX Runtime allocates from an arena that keeps
-every block it takes, and a service answering questions of varying length grows
-past a gigabyte. Allocating per call holds it at 257 MB and costs 2.6 times the
-retrieval latency, which reranking depth then buys back. Both trades are in
-[EVALUATION.md](EVALUATION.md).
+A figure taken from a freshly started process is not a budget, and neither is a
+resident set sampled between requests. ONNX Runtime allocates from an arena that
+keeps every block it takes, so a service answering questions of varying length
+grows past a gigabyte; and scoring twenty-five passages in one forward pass
+peaked at 836 MB while sitting at 275 MB in between. The first deployment died
+of the second. Both are in [EVALUATION.md](EVALUATION.md).
 
 There is no deep learning framework in the serving image. The encoders are
 exported graphs and tokenisation goes through the Rust tokenizer, so the whole

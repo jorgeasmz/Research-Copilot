@@ -83,7 +83,8 @@ app.add_middleware(
 )
 
 
-@app.get("/")
+# The platform probes with HEAD, which a GET-only route answers with 405.
+@app.api_route("/", methods=["GET", "HEAD"])
 def health(request: Request) -> dict:
     cache = request.app.state.cache
     return {
