@@ -85,7 +85,7 @@ whether it declines when the corpus cannot answer.
 
 | | |
 |---|---:|
-| nDCG@10 on SciFact, `hybrid` | 0.709 |
+| nDCG@10 on SciFact, `hybrid` | 0.698 |
 | Passage found on the corpus, `hybrid+rerank` | 0.71 |
 | Resident under sustained load | 257 MB |
 | Fabricated citations over 25 questions | 0 |

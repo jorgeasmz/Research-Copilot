@@ -20,11 +20,16 @@ and reranking code is the code the service runs.
 | Retriever | nDCG@10 | Recall@10 | MRR@10 |
 |---|---:|---:|---:|
 | `bm25` | 0.652 | 0.776 | 0.618 |
-| `dense` | **0.713** | 0.836 | **0.682** |
-| `hybrid` | 0.709 | 0.838 | 0.675 |
-| `hybrid+rerank` | 0.703 | **0.846** | 0.667 |
+| `dense` | **0.702** | 0.825 | **0.673** |
+| `hybrid` | 0.698 | 0.819 | 0.666 |
+| `hybrid+rerank` | 0.697 | **0.832** | 0.664 |
 
-BM25 at 0.652 and `bge-small-en-v1.5` at 0.713 sit where the published SciFact
+These are the served int8 graphs. The fp32 originals score 0.713, 0.709 and
+0.703 on the same three rows, so quantisation costs 0.011 of nDCG consistently.
+BM25 does not move, which is the check that the difference comes from the
+encoders rather than from the harness.
+
+BM25 at 0.652 and `bge-small-en-v1.5` at 0.702 sit where the published SciFact
 numbers for those methods sit. That is the check that the implementation is
 correct rather than merely self-consistent.
 
