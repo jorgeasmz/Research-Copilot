@@ -36,23 +36,36 @@ in the top five, and whether that passage does.
 
 | Retriever | Paper found | Passage found | MRR | Latency ms |
 |---|---:|---:|---:|---:|
-| `bm25`, sparse matrix | 0.84 | 0.43 | 0.627 | **3** |
-| `bm25`, dictionary per document | 0.84 | 0.43 | 0.680 | 85 |
-| `postgres fts` | 0.32 | 0.07 | 0.263 | 82 |
-| `dense` | 0.68 | 0.57 | 0.473 | 21 |
-| `hybrid` | 0.74 | 0.43 | 0.662 | 33 |
-| `hybrid+rerank` | **0.84** | **0.71** | **0.708** | 1105 |
+| `bm25`, sparse matrix | 0.84 | 0.43 | 0.627 | **4** |
+| `bm25`, dictionary per document | 0.84 | 0.43 | 0.680 | 86 |
+| `postgres fts` | 0.37 | 0.07 | 0.215 | 95 |
+| `dense` | 0.58 | 0.43 | 0.342 | 11 |
+| `hybrid` | 0.79 | 0.43 | 0.636 | 24 |
+| `hybrid+rerank` | **0.89** | **0.71** | **0.718** | 1,888 |
 
-The two BM25 rows score the same passages. They differ in storage and in how
+The two BM25 rows retrieve the same passages. They differ in storage, and in how
 they treat a term common enough to earn a negative weight under the unsmoothed
 formula: the library floors it, this implementation smooths it, and the ordering
 inside the top five shifts accordingly. The sparse matrix holds 8.6 MB against
-558 MB resident, and answers in 3 ms against 85.
+558 MB resident, and answers in 4 ms against 86.
 
 Postgres full text search was measured as the alternative that needs no index in
 the process at all, and rejected. `ts_rank_cd` carries no inverse document
 frequency, so a term appearing in most passages weighs as much as one appearing
-in two, and the ranking collapses.
+in two, and the ranking collapses to 0.07 passage accuracy.
+
+### What quantisation costs
+
+Both encoders are served as int8 graphs. Measured against the same questions
+with the fp32 originals, the end to end result is unchanged, at 0.89 paper and
+0.71 passage either way, and MRR moves from 0.683 to 0.718.
+
+The bi-encoder alone does degrade: on its own it falls from 0.68 to 0.58 on
+paper recall and from 0.57 to 0.43 on passage. Fusion with BM25 and the
+cross-encoder absorb that, so the served configuration shows no loss, but a
+query mix the lexical retriever could not help would expose it. Keeping the
+bi-encoder at fp32 and quantising only the cross-encoder costs 114 MB more
+resident and buys nothing measurable here.
 
 Scoping the corpus to one field is what makes this hard. On a general `quant-ph`
 corpus of 249 papers the same questions reached 0.82 passage accuracy without
@@ -112,12 +125,12 @@ term index over 18,969 chunks and loads both encoders.
 
 | Stage | p50 ms |
 |---|---:|
-| Retrieval without reranking | 33 |
-| Retrieval with reranking | 1,105 |
+| Retrieval without reranking | 24 |
+| Retrieval with reranking | 1,888 |
 | Complete answer | 9,219 |
 
 Retrieval is dominated by the cross-encoder: without it the same query costs
-33 ms. The generation p95 is one question
+24 ms. The generation p95 is one question
 that hit a saturated model and fell through the chain; the median is what a
 served request looks like.
 
