@@ -27,7 +27,7 @@ THREADS = 1
 # about the result and everything about the transient allocation: twenty-five
 # pairs of five hundred tokens in one pass peaked at 836 MB, which is more than
 # the container has, while the resident set between calls sat at 275 MB.
-BATCH = 4
+BATCH = 2
 
 
 def _session(path: Path) -> onnxruntime.InferenceSession:
