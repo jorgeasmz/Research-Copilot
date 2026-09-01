@@ -18,6 +18,10 @@ data/beir/
 data/papers.jsonl
 models/
 
+# Exported encoder graphs. The image builds them in its first stage and
+# copies them forward, so they are an output rather than a source.
+artifacts/
+
 # Testing
 .pytest_cache/
 .coverage

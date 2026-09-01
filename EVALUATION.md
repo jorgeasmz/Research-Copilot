@@ -54,6 +54,40 @@ the process at all, and rejected. `ts_rank_cd` carries no inverse document
 frequency, so a term appearing in most passages weighs as much as one appearing
 in two, and the ranking collapses to 0.07 passage accuracy.
 
+### What the memory budget costs
+
+Fitting 512 MB is not only a matter of smaller weights. ONNX Runtime allocates
+from an arena that keeps every block it takes and asks for a new one per tensor
+shape, so a service seeing questions of varying length grows without bound.
+
+| Allocation | Peak over fifty queries | Retrieval p50 |
+|---|---:|---:|
+| Arena on, padded to the batch | 1,264 MB | 1,888 ms |
+| Arena on, padded to 512-token buckets | 2,999 MB | 5,260 ms |
+| Arena on, padded to 32-token buckets | 1,453 MB | 2,562 ms |
+| **Arena off** | **257 MB** | 3,762 ms |
+
+Fixed widths do bound the growth, which is what they are for, but only at 1.4 GB,
+and coarse ones cost compute: rounding a 320-token batch to 512 wastes a third
+of the work and made both figures worse. Allocating per call is the only
+configuration that fits, and it is 2.6 times slower.
+
+Reranking depth buys that time back, and the corpus set says where.
+
+| Depth | Paper found | Passage found | MRR | Retrieval p50 |
+|---|---:|---:|---:|---:|
+| No reranking | 0.79 | 0.43 | 0.636 | 24 ms |
+| 5 | 0.79 | 0.43 | 0.605 | 384 ms |
+| 10 | 0.89 | 0.57 | **0.732** | 1,248 ms |
+| **25** | **0.89** | **0.71** | 0.718 | 3,762 ms |
+| 50 | 0.84 | 0.71 | 0.673 | — |
+
+Five is not worth running: it costs 360 ms and recovers nothing the fusion had
+not already ranked. Ten reaches the best MRR at a third of the latency. Depth 25
+is what ships, because passage accuracy is what the service exists for and 0.71
+against 0.57 is two more of the fourteen anchored questions, on a request whose
+generation step takes nine seconds regardless.
+
 ### What quantisation costs
 
 Both encoders are served as int8 graphs. Measured against the same questions

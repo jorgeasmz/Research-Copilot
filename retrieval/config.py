@@ -15,4 +15,5 @@ RRF_K = 60
 # though not on the public benchmark. See the README.
 RERANKER_MODEL = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 RERANK_DEPTH = 25
+RERANK_MAX_LENGTH = 512
 RERANK_BY_DEFAULT = True

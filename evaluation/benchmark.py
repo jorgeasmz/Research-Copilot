@@ -49,7 +49,6 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--queries", type=int, default=0, help="Limit for a quick run.")
     parser.add_argument("--candidates", type=int, default=retrieval_config.CANDIDATES)
-    parser.add_argument("--reranker", default=retrieval_config.RERANKER_MODEL)
     parser.add_argument("--depth", type=int, default=retrieval_config.RERANK_DEPTH)
     args = parser.parse_args()
 
@@ -93,7 +92,7 @@ def main() -> None:
         fused = fuse([dense_hits, lexical_hits])
 
         started = time.perf_counter()
-        reranked = rerank(query, fused, depth=args.depth, name=args.reranker)
+        reranked = rerank(query, fused, depth=args.depth)
         rerank_ms = (time.perf_counter() - started) * 1000
 
         for name, ranking, latency in (
