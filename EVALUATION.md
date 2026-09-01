@@ -36,10 +36,23 @@ in the top five, and whether that passage does.
 
 | Retriever | Paper found | Passage found | MRR | Latency ms |
 |---|---:|---:|---:|---:|
-| `bm25` | 0.84 | 0.43 | 0.680 | 101 |
-| `dense` | 0.68 | 0.57 | 0.473 | **25** |
-| `hybrid` | 0.79 | 0.43 | 0.646 | 135 |
-| `hybrid+rerank` | **0.89** | **0.71** | **0.683** | 1530 |
+| `bm25`, sparse matrix | 0.84 | 0.43 | 0.627 | **3** |
+| `bm25`, dictionary per document | 0.84 | 0.43 | 0.680 | 85 |
+| `postgres fts` | 0.32 | 0.07 | 0.263 | 82 |
+| `dense` | 0.68 | 0.57 | 0.473 | 21 |
+| `hybrid` | 0.74 | 0.43 | 0.662 | 33 |
+| `hybrid+rerank` | **0.84** | **0.71** | **0.708** | 1105 |
+
+The two BM25 rows score the same passages. They differ in storage and in how
+they treat a term common enough to earn a negative weight under the unsmoothed
+formula: the library floors it, this implementation smooths it, and the ordering
+inside the top five shifts accordingly. The sparse matrix holds 8.6 MB against
+558 MB resident, and answers in 3 ms against 85.
+
+Postgres full text search was measured as the alternative that needs no index in
+the process at all, and rejected. `ts_rank_cd` carries no inverse document
+frequency, so a term appearing in most passages weighs as much as one appearing
+in two, and the ranking collapses.
 
 Scoping the corpus to one field is what makes this hard. On a general `quant-ph`
 corpus of 249 papers the same questions reached 0.82 passage accuracy without
@@ -56,8 +69,8 @@ On 300 judged SciFact queries the cross-encoder lowers nDCG@10 from 0.709 to
 recover the loss; nDCG falls to 0.699. SciFact is claim verification against
 abstracts, and the model was trained on web passages.
 
-On the corpus it raises passage selection from 0.43 to 0.71, four of the fourteen
-anchored questions, and paper recall from 0.79 to 0.89.
+On the corpus it raises passage selection from 0.43 to 0.71, four of the
+fourteen anchored questions, and paper recall from 0.74 to 0.84.
 
 It is enabled on that basis, because the corpus is what the service serves. The
 caveat is that fourteen anchored questions is a small sample. A larger
@@ -95,15 +108,16 @@ is the behaviour the refusal instruction exists to produce.
 ## Latency
 
 Retrieval is measured after a warm-up query, since the first call builds the
-BM25 index over 18,969 chunks and loads both encoders.
+term index over 18,969 chunks and loads both encoders.
 
-| Stage | p50 ms | p95 ms |
-|---|---:|---:|
-| Retrieval | 1,583 | 1,848 |
-| First token | 7,820 | 51,418 |
-| Complete answer | 9,219 | 52,736 |
+| Stage | p50 ms |
+|---|---:|
+| Retrieval without reranking | 33 |
+| Retrieval with reranking | 1,105 |
+| Complete answer | 9,219 |
 
-Retrieval is dominated by the cross-encoder. The generation p95 is one question
+Retrieval is dominated by the cross-encoder: without it the same query costs
+33 ms. The generation p95 is one question
 that hit a saturated model and fell through the chain; the median is what a
 served request looks like.
 

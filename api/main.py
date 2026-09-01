@@ -15,7 +15,9 @@ from api.schemas import Passage, SearchRequest, SearchResponse
 from db.session import SessionLocal
 from generation import graph, provider
 from generation.cache import SemanticCache
+from ingest.embed import model as encoder
 from retrieval import hybrid, sparse
+from retrieval.rerank import model as cross_encoder
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +35,11 @@ Session = Annotated[object, Depends(get_session)]
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """
-    Warms the BM25 index and the encoders so the first caller does not pay for them.
+    Warms the index and both encoders so the first caller does not pay for them.
+
+    Loading the two models takes most of a cold start, and a platform that scales
+    to zero allocates CPU during container start and meters it during a request,
+    so the cost belongs here rather than in whichever request arrives first.
 
     A failure is recorded rather than raised: the service still answers the
     health check, which lets an orchestrator report a degraded state instead of
@@ -43,6 +49,8 @@ async def lifespan(app: FastAPI):
         with SessionLocal() as session:
             session.execute(text("select 1"))
             sparse.get_index(session)
+        encoder()
+        cross_encoder()
         app.state.cache = SemanticCache()
         app.state.ready = True
     except Exception:

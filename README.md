@@ -1,13 +1,3 @@
----
-title: Research Copilot
-emoji: 🔑
-colorFrom: green
-colorTo: blue
-sdk: docker
-pinned: false
-app_port: 7860
----
-
 # Research Copilot
 
 Answers questions about the quantum cryptography literature on arXiv, citing the
@@ -74,11 +64,17 @@ Fusion combines ranks rather than scores. A BM25 score and a cosine similarity
 live on scales that are not comparable and neither is calibrated, so weighting
 them directly would require normalising a quantity with no fixed range.
 
-BM25 is built in process from the stored chunks rather than in the database.
-Postgres full text search ranks with `ts_rank`, which is not BM25, and the
-evaluation below is only comparable to published numbers if the scoring
-function is the one those numbers used. At corpus scale this is the component
-that would move into the database first.
+BM25 is built in process from the stored chunks, as one compressed sparse
+matrix of term frequencies rather than a dictionary per document. The scoring is
+the textbook Okapi formula either way; the storage is what decides whether the
+index fits in a service or dominates it. Over 18,969 chunks the matrix holds
+8.6 MB and the process grows by 44 MB, against 558 MB for the usual library
+implementation, and a query costs 3 ms rather than 85.
+
+Moving lexical search into Postgres was measured and rejected. `ts_rank_cd`
+carries no inverse document frequency, so a common word weighs as much as a rare
+one, and on the question set it finds the answering paper 32% of the time
+against 84% for BM25.
 
 ## Evaluation
 
@@ -91,9 +87,10 @@ whether it declines when the corpus cannot answer.
 |---|---:|
 | nDCG@10 on SciFact, `hybrid` | 0.709 |
 | Passage found on the corpus, `hybrid+rerank` | 0.71 |
+| Term index resident | 44 MB |
 | Fabricated citations over 25 questions | 0 |
 | Declined on 6 uncovered questions | 6/6 |
-| Retrieval p50 | 1.6 s |
+| Retrieval p50, with reranking | 1.1 s |
 | Complete answer p50 | 9.2 s |
 
 The numbers, how they were obtained and what they cost are in
@@ -185,25 +182,44 @@ skipped, and downloaded sources are cached on disk.
 
 ## Deployment
 
-| Component | Host | Why |
-|---|---|---|
-| API | Hugging Face Spaces, Docker | The encoders, the reranker and the term index need more memory than a small free container has |
-| Corpus | Neon | Postgres with `pgvector`, and the corpus is 88 MB |
-| Client | Vercel | Static export of the Next.js page |
+| Component | Host |
+|---|---|
+| API | Google Cloud Run |
+| Corpus | Neon, Postgres with `pgvector` |
+| Client | Vercel |
 
-The Space is given `DATABASE_URL` and `ALLOWED_ORIGINS` as secrets. It is not
-given `GOOGLE_API_KEY`: without one the service still retrieves, and generating
-an answer requires the caller to supply a key, which is what keeps a public demo
-from spending a single day's quota in an afternoon.
+The service holds roughly 1.2 GB resident: 434 MB of imports, 589 MB for the
+term index over 18,969 chunks, and about 150 MB for the two encoders. That rules
+out the 512 MB tier most free hosts offer, so it runs on Cloud Run at 2 GiB and
+scales to zero between visits.
+
+A cold start is close to 40 seconds, and 28 of those are loading the encoders.
+Both are loaded during startup rather than on the first request, since the
+platform allocates CPU while a container starts and meters it while a request is
+being served.
+
+The service is given `DATABASE_URL`, pointing at the pooled Neon endpoint, and
+`ALLOWED_ORIGINS`, carrying the client's domain. It is not given a model API key:
+without one the service still retrieves, and generating an answer requires the
+caller to supply their own, which is what keeps a public demo from spending a
+single day's quota in an afternoon.
 
 The corpus is moved rather than rebuilt. Re-ingesting means fetching three
 hundred sources from arXiv again at the delay the API asks for, so the local
 database is dumped and restored instead.
 
 ```bash
-docker compose exec -T db pg_dump -U copilot -d copilot --no-owner > corpus.sql
-psql "$NEON_URL" -f corpus.sql
+docker compose exec -T db pg_dump -U copilot -d copilot --data-only \
+  -t papers -t chunks > corpus.sql
+docker compose exec -T db psql "$DIRECT_URL" -f /dev/stdin < corpus.sql
 ```
+
+Both the migration and the restore go through the direct endpoint rather than
+the pooled one. `pg_dump` opens its script with a session-level
+`set_config('search_path', '', false)`, and a pooler working in transaction mode
+hands the same server connection to the next client, which inherits that empty
+search path and cannot resolve an unqualified table name. The application uses
+the pooled endpoint, where it only issues ordinary queries.
 
 ## Development
 

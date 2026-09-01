@@ -17,14 +17,16 @@ import time
 from db.session import SessionLocal
 from evaluation.metrics import reciprocal_rank
 from ingest import config
-from retrieval import dense, hybrid, sparse
+from retrieval import bm25, dense, hybrid, lexical, sparse
 
 QUESTIONS = config.DATA / "questions.json"
 
 
 def evaluate(session, questions: list[dict], top_k: int) -> dict:
     strategies = {
-        "bm25": lambda q: sparse.search(session, q, top_k),
+        "bm25 (rank_bm25)": lambda q: sparse.search(session, q, top_k),
+        "bm25 (sparse matrix)": lambda q: bm25.search(session, q, top_k),
+        "postgres fts": lambda q: lexical.search(session, q, top_k),
         "dense": lambda q: dense.search(session, q, top_k),
         "hybrid": lambda q: hybrid.search(session, q, top_k, reranked=False),
         "hybrid+rerank": lambda q: hybrid.search(session, q, top_k, reranked=True),

@@ -1,6 +1,6 @@
 """Combines the lexical and dense rankings, then reranks the result."""
 
-from retrieval import config, dense, rerank, sparse
+from retrieval import bm25, config, dense, rerank
 from retrieval.dense import Candidate
 
 
@@ -50,7 +50,7 @@ def search(
     """
     rankings = [
         dense.search(session, query, candidates),
-        sparse.search(session, query, candidates),
+        bm25.search(session, query, candidates),
     ]
     fused = fuse(rankings)
     if reranked:
