@@ -9,7 +9,7 @@
 --extra-index-url https://download.pytorch.org/whl/cpu
 
 torch==2.13.0+cpu
-transformers==5.15.1
+transformers==5.16.1
 sentence-transformers==6.0.0
 onnx==1.22.0
 onnxscript==0.7.1
