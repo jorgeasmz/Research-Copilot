@@ -87,10 +87,10 @@ whether it declines when the corpus cannot answer.
 |---|---:|
 | nDCG@10 on SciFact, `hybrid` | 0.709 |
 | Passage found on the corpus, `hybrid+rerank` | 0.71 |
-| Term index resident | 44 MB |
+| Resident set | 275 MB |
 | Fabricated citations over 25 questions | 0 |
 | Declined on 6 uncovered questions | 6/6 |
-| Retrieval p50, with reranking | 1.1 s |
+| Retrieval p50, with reranking | 1.9 s |
 | Complete answer p50 | 9.2 s |
 
 The numbers, how they were obtained and what they cost are in
@@ -184,19 +184,32 @@ skipped, and downloaded sources are cached on disk.
 
 | Component | Host |
 |---|---|
-| API | Google Cloud Run |
+| API | Render |
 | Corpus | Neon, Postgres with `pgvector` |
 | Client | Vercel |
 
-The service holds roughly 1.2 GB resident: 434 MB of imports, 589 MB for the
-term index over 18,969 chunks, and about 150 MB for the two encoders. That rules
-out the 512 MB tier most free hosts offer, so it runs on Cloud Run at 2 GiB and
-scales to zero between visits.
+The service holds 275 MB resident and starts in under two seconds, which fits
+the 512 MB free tier most hosts offer. Getting there took two measured changes
+rather than a bigger machine.
 
-A cold start is close to 40 seconds, and 28 of those are loading the encoders.
-Both are loaded during startup rather than on the first request, since the
-platform allocates CPU while a container starts and meters it while a request is
-being served.
+| | Resident | Startup |
+|---|---:|---:|
+| Library BM25, encoders under PyTorch | 1,177 MB | 35.8 s |
+| Term index as a sparse matrix | 479 MB | — |
+| Encoders as ONNX graphs | 457 MB | 2.3 s |
+| Encoders quantised to int8 | **275 MB** | **1.6 s** |
+
+There is no deep learning framework in the serving image. The encoders are
+exported graphs and tokenisation goes through the Rust tokenizer, so the whole
+inference stack is `onnxruntime` and `tokenizers`, and imports cost 100 MB
+rather than 434. `torch` writes the graphs and never runs them, which is why the
+image builds in two stages and the first one is discarded.
+
+Pooling and normalisation are inside the exported graph rather than reimplemented
+at call time. Both have to agree exactly with what the model was trained under,
+and a graph carrying them cannot drift from a reimplementation. Parity was
+checked before the swap: cosine 1.0 against the original embeddings, and
+identical reranker logits.
 
 The service is given `DATABASE_URL`, pointing at the pooled Neon endpoint, and
 `ALLOWED_ORIGINS`, carrying the client's domain. It is not given a model API key:

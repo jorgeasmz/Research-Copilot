@@ -35,6 +35,7 @@ SOURCE_URL = "https://arxiv.org/e-print"
 # reasonable time, which the base model at 768 dimensions does not.
 EMBEDDING_MODEL = "BAAI/bge-small-en-v1.5"
 EMBEDDING_BATCH = 32
+EMBEDDING_MAX_LENGTH = 512
 
 # bge was trained with an asymmetric objective: queries carry this prefix and
 # passages carry none. Embedding both the same way costs measurable recall.

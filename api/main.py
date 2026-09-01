@@ -15,9 +15,8 @@ from api.schemas import Passage, SearchRequest, SearchResponse
 from db.session import SessionLocal
 from generation import graph, provider
 from generation.cache import SemanticCache
-from ingest.embed import model as encoder
-from retrieval import hybrid, sparse
-from retrieval.rerank import model as cross_encoder
+from retrieval import bm25, hybrid
+from retrieval.encoders import pairs, passages
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +47,9 @@ async def lifespan(app: FastAPI):
     try:
         with SessionLocal() as session:
             session.execute(text("select 1"))
-            sparse.get_index(session)
-        encoder()
-        cross_encoder()
+            bm25.get_index(session)
+        passages()
+        pairs()
         app.state.cache = SemanticCache()
         app.state.ready = True
     except Exception:

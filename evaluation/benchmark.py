@@ -18,12 +18,12 @@ import numpy as np
 from evaluation import beir
 from evaluation.metrics import ndcg_at_k, recall_at_k, reciprocal_rank
 from ingest import config
-from ingest.embed import encode_passages, encode_query
 from retrieval import config as retrieval_config
+from retrieval.bm25 import tokenize
 from retrieval.dense import Candidate
+from retrieval.encoders import encode_passages, encode_query
 from retrieval.hybrid import fuse
 from retrieval.rerank import rerank
-from retrieval.sparse import tokenize
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 logger = logging.getLogger(__name__)

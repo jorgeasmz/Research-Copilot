@@ -1,0 +1,19 @@
+# Everything that runs before a request does: ingestion, encoder export and
+# evaluation. None of it belongs in the serving image, and torch alone is the
+# difference between a 100 MB import and a 434 MB one.
+-r requirements.txt
+
+# The CPU wheels live on PyTorch's own index. This directive has to sit on its
+# own line: appended to a requirement it is silently ignored, and pip then
+# resolves torch from PyPI, pulling in several GB of CUDA libraries.
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+torch==2.13.0+cpu
+transformers==5.16.1
+sentence-transformers==6.0.0
+onnx==1.22.0
+onnxscript==0.7.1
+
+httpx==0.28.1
+pylatexenc==2.11
+rank-bm25==0.2.2

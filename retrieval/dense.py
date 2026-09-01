@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from sqlalchemy import select
 
 from db.models import Chunk
-from ingest.embed import encode_query
+from retrieval.encoders import encode_query
 
 
 @dataclass(frozen=True)
