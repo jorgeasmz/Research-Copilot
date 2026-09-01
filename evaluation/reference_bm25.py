@@ -1,4 +1,10 @@
-"""BM25 over the stored chunks, held in process."""
+"""
+The library implementation of BM25, kept as the reference the service is checked against.
+
+It is not what the service runs. A dictionary of term frequencies per document
+costs 558 MB over this corpus against 44 MB for the same scoring over a sparse
+matrix, which is why retrieval/bm25.py exists.
+"""
 
 import logging
 import re
