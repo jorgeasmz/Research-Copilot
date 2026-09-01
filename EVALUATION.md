@@ -72,7 +72,8 @@ shape, so a service seeing questions of varying length grows without bound.
 | Arena on, padded to 32-token buckets | 1,453 MB | — | 2,562 ms |
 | Arena off, 25 pairs per pass | 275 MB | 836 MB | 3,762 ms |
 | Arena off, 8 pairs per pass | 266 MB | 458 MB | 2,539 ms |
-| **Arena off, 4 pairs per pass** | **255 MB** | **341 MB** | **1,974 ms** |
+| Arena off, 4 pairs per pass | 255 MB | 341 MB | 1,974 ms |
+| **Arena off, 2 pairs per pass** | **265 MB** | **372 MB** | **1,108 ms** |
 
 The last three rows are the same configuration measured three ways, and the
 difference between the resident and peak columns is the reason the first
@@ -82,9 +83,14 @@ reported exactly what that implies: `Ran out of memory (used over 512MB) while
 running your code`.
 
 Scoring is independent per pair, so the number of pairs in a forward pass
-changes nothing about the result and everything about that transient. Four is
-also the fastest of the three, which is not the trade it looks like from the
-outside: smaller passes fit the cache better than one large one.
+changes nothing about the result and everything about that transient. Smaller
+passes are also faster, which is not the trade it looks like from the outside:
+they fit the cache better than one large one.
+
+Answering costs more than retrieving, and the deployment that survived a search
+still died generating. Measured on the same machine, the retrieval path peaks at
+372 MB and the answer path, which adds the model client and the streaming
+machinery on top, at 326 MB with two pairs per pass against 455 MB with four.
 
 Fixed widths do bound the growth, which is what they are for, but only at 1.4 GB,
 and coarse ones cost compute: rounding a 320-token batch to 512 wastes a third
