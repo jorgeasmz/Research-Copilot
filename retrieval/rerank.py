@@ -1,24 +1,10 @@
 """Cross-encoder reranking of a fused candidate list."""
 
-import functools
-
-from sentence_transformers import CrossEncoder
-
-from retrieval import config
+from retrieval import config, encoders
 from retrieval.dense import Candidate
 
 
-@functools.lru_cache(maxsize=2)
-def model(name: str = config.RERANKER_MODEL) -> CrossEncoder:
-    return CrossEncoder(name, device="cpu")
-
-
-def rerank(
-    query: str,
-    candidates: list[Candidate],
-    depth: int | None = None,
-    name: str = config.RERANKER_MODEL,
-) -> list[Candidate]:
+def rerank(query: str, candidates: list[Candidate], depth: int | None = None) -> list[Candidate]:
     """
     Rescores the head of the list by reading query and passage together.
 
@@ -30,7 +16,7 @@ def rerank(
     if not head:
         return candidates
 
-    scores = model(name).predict([(query, candidate.text) for candidate in head])
+    scores = encoders.pairs().score(query, [candidate.text for candidate in head])
     rescored = [
         Candidate(
             chunk_id=c.chunk_id,

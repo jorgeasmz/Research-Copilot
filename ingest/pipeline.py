@@ -17,9 +17,9 @@ from db.session import SessionLocal
 from ingest import config
 from ingest.arxiv import Paper, search
 from ingest.chunk import chunk_paper
-from ingest.embed import encode_passages
 from ingest.extract import paragraphs
 from ingest.source import fetch
+from retrieval.encoders import encode_passages
 
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 # httpx logs one line per request at INFO, which buries the ingestion output.

@@ -23,7 +23,7 @@ from dataclasses import dataclass, field
 
 import numpy as np
 
-from ingest.embed import encode_query
+from retrieval.encoders import encode_query
 
 logger = logging.getLogger(__name__)
 
