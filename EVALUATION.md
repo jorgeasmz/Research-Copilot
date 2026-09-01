@@ -65,17 +65,31 @@ Fitting 512 MB is not only a matter of smaller weights. ONNX Runtime allocates
 from an arena that keeps every block it takes and asks for a new one per tensor
 shape, so a service seeing questions of varying length grows without bound.
 
-| Allocation | Peak over fifty queries | Retrieval p50 |
-|---|---:|---:|
-| Arena on, padded to the batch | 1,264 MB | 1,888 ms |
-| Arena on, padded to 512-token buckets | 2,999 MB | 5,260 ms |
-| Arena on, padded to 32-token buckets | 1,453 MB | 2,562 ms |
-| **Arena off** | **257 MB** | 3,762 ms |
+| Allocation | Resident | Peak | Retrieval p50 |
+|---|---:|---:|---:|
+| Arena on, padded to the batch | 1,264 MB | — | 1,888 ms |
+| Arena on, padded to 512-token buckets | 2,999 MB | — | 5,260 ms |
+| Arena on, padded to 32-token buckets | 1,453 MB | — | 2,562 ms |
+| Arena off, 25 pairs per pass | 275 MB | 836 MB | 3,762 ms |
+| Arena off, 8 pairs per pass | 266 MB | 458 MB | 2,539 ms |
+| **Arena off, 4 pairs per pass** | **255 MB** | **341 MB** | **1,974 ms** |
+
+The last three rows are the same configuration measured three ways, and the
+difference between the resident and peak columns is the reason the first
+deployment died. A resident set sampled between requests said 275 MB; the
+transient allocation during one request reached 836 MB, and the platform
+reported exactly what that implies: `Ran out of memory (used over 512MB) while
+running your code`.
+
+Scoring is independent per pair, so the number of pairs in a forward pass
+changes nothing about the result and everything about that transient. Four is
+also the fastest of the three, which is not the trade it looks like from the
+outside: smaller passes fit the cache better than one large one.
 
 Fixed widths do bound the growth, which is what they are for, but only at 1.4 GB,
 and coarse ones cost compute: rounding a 320-token batch to 512 wastes a third
 of the work and made both figures worse. Allocating per call is the only
-configuration that fits, and it is 2.6 times slower.
+configuration that fits.
 
 Reranking depth buys that time back, and the corpus set says where.
 
