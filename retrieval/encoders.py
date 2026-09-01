@@ -23,6 +23,12 @@ ARTIFACTS = Path(os.getenv("ENCODER_DIR", str(ingest_config.ROOT / "artifacts" /
 # and the platform allots a fraction of a core, where more threads only contend.
 THREADS = 1
 
+# Rows per forward pass. Scoring is independent per row, so this changes nothing
+# about the result and everything about the transient allocation: twenty-five
+# pairs of five hundred tokens in one pass peaked at 836 MB, which is more than
+# the container has, while the resident set between calls sat at 275 MB.
+BATCH = 4
+
 
 def _session(path: Path) -> onnxruntime.InferenceSession:
     options = onnxruntime.SessionOptions()
@@ -67,6 +73,11 @@ class Encoder:
         self.inputs = {tensor.name for tensor in self.session.get_inputs()}
 
     def encode(self, texts: list[str]) -> np.ndarray:
+        return np.concatenate(
+            [self._run(texts[start : start + BATCH]) for start in range(0, len(texts), BATCH)]
+        )
+
+    def _run(self, texts: list[str]) -> np.ndarray:
         feeds = _pad(self.tokenizer.encode_batch(texts), self.max_length)
         return self.session.run(None, {k: v for k, v in feeds.items() if k in self.inputs})[0]
 
@@ -82,6 +93,14 @@ class PairScorer:
         self.inputs = {tensor.name for tensor in self.session.get_inputs()}
 
     def score(self, query: str, passages: list[str]) -> np.ndarray:
+        return np.concatenate(
+            [
+                self._run(query, passages[start : start + BATCH])
+                for start in range(0, len(passages), BATCH)
+            ]
+        )
+
+    def _run(self, query: str, passages: list[str]) -> np.ndarray:
         encoded = self.tokenizer.encode_batch([(query, passage) for passage in passages])
         feeds = _pad(encoded, self.max_length)
         logits = self.session.run(None, {k: v for k, v in feeds.items() if k in self.inputs})[0]
@@ -98,13 +117,8 @@ def pairs() -> PairScorer:
     return PairScorer(ARTIFACTS / "pairs", retrieval_config.RERANK_MAX_LENGTH)
 
 
-def encode_passages(texts: list[str], batch_size: int = 32) -> np.ndarray:
-    return np.concatenate(
-        [
-            passages().encode(texts[start : start + batch_size])
-            for start in range(0, len(texts), batch_size)
-        ]
-    )
+def encode_passages(texts: list[str]) -> np.ndarray:
+    return passages().encode(texts)
 
 
 def encode_query(text: str) -> np.ndarray:
