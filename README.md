@@ -182,11 +182,11 @@ skipped, and downloaded sources are cached on disk.
 
 ## Deployment
 
-| Component | Host |
-|---|---|
-| API | Render |
-| Corpus | Neon, Postgres with `pgvector` |
-| Client | Vercel |
+| Component | Host | |
+|---|---|---|
+| API | Render | [research-copilot-mxff.onrender.com](https://research-copilot-mxff.onrender.com) |
+| Corpus | Neon, Postgres with `pgvector` | |
+| Client | Vercel | [research-copilot-livid.vercel.app](https://research-copilot-livid.vercel.app) |
 
 The service holds 275 MB resident and starts in under two seconds, which fits
 the 512 MB free tier most hosts offer. Getting there took two measured changes
@@ -248,7 +248,7 @@ the pooled endpoint, where it only issues ordinary queries.
 ```bash
 pip install -r requirements-dev.txt
 
-pytest              # 73 tests
+pytest              # 87 tests
 ruff check .
 ```
 
