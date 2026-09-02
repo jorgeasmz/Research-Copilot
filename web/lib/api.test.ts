@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { splitEvents } from "./api";
+import { splitEvents } from "@/lib/api";
 
 const CRLF = "event: token\r\ndata: \"first\"\r\n\r\nevent: token\r\ndata: \"second\"\r\n\r\n";
 const LF = 'event: token\ndata: "first"\n\nevent: token\ndata: "second"\n\n';
